@@ -1,7 +1,10 @@
 # Sky Code - AI 智能助手桌面应用
 
-基于 PySide6 和 LangChain 框架构建的多功能 AI 桌面助手，支持大语言模型对话、智能体推理、文档解析和数据分析。
-
+基于 PySide6 和 LangChain 框架构建的多功能 AI 桌面助手，支持大语言模型对话、智能体推理、文档解析和数据分析，支持自定义接入模型，可选Chat/Agent模式。
+## UI展示
+![img.png](images/img.png)
+![img_1.png](images/img_1.png)
+![img.png](images/img_2.png)
 ## 功能特性
 
 ### 智能对话

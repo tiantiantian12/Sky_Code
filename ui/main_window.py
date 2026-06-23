@@ -1,4 +1,4 @@
-﻿﻿"""
+﻿"""
 主窗口模块
 包含MainWindow类及其所有UI布局和交互逻辑
 """
@@ -606,17 +606,18 @@ class MainWindow(QMainWindow):
         input_layout.addWidget(self.send_btn)
         input_layout.addWidget(self.model_combo)
 
-        # Agent 模式切换按钮
-        self.agent_btn = QPushButton("🤖")
-        self.agent_btn.setFixedSize(38, 38)
+        # Agent/Chat 模式切换按钮
+        self.agent_btn = QPushButton("Chat")
+        self.agent_btn.setFixedSize(56, 38)
         self.agent_btn.setCursor(Qt.PointingHandCursor)
-        self.agent_btn.setToolTip("Agent 模式: 启用后 AI 可读写本地文件")
+        self.agent_btn.setToolTip("切换 Chat/Agent 模式")
         self.agent_btn.setStyleSheet("""
             QPushButton {
                 background: #f0f0f3; border: 1.5px solid #d1d1d6;
-                border-radius: 19px; font-size: 16px;
+                border-radius: 19px; font-size: 12px; font-weight: bold;
+                color: #6b7280;
             }
-            QPushButton:hover { border-color: #6366f1; }
+            QPushButton:hover { border-color: #6366f1; color: #6366f1; }
             QPushButton:checked {
                 background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #6366f1, stop:1 #a855f7);
                 border-color: #6366f1; color: white;
@@ -746,12 +747,14 @@ class MainWindow(QMainWindow):
     # ---- 文件附件处理 ----
 
     def _toggle_agent_mode(self, checked):
-        """切换 Agent 模式"""
+        """切换 Agent/Chat 模式"""
         self.chat_service.agent_mode = checked
         if checked:
+            self.agent_btn.setText("Agent")
             self.show_toast("Agent 模式已启用 (ReAct 推理 + 文件工具)")
         else:
-            self.show_toast("Agent 模式已关闭")
+            self.agent_btn.setText("Chat")
+            self.show_toast("Chat 模式已启用")
 
     def _toggle_image_panel(self):
         """切换图片生成面板显示/隐藏"""
