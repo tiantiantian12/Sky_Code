@@ -13,3 +13,14 @@ beautifulsoup4>=4.12.0
 PyPDF2>=3.0.0
 python-docx>=0.8.11
 python-pptx>=0.6.21
+chromadb>=0.4.0
+sentence-transformers>=2.2.0
+duckduckgo-search>=8.0.0
+ddgs>=9.0.0
+beautifulsoup4>=4.12.0
+selenium>=4.0.0
+webdriver-manager>=4.0.0
+# LSP & Linter 工具依赖
+flake8>=7.0.0
+black>=24.0.0
+autopep8>=2.0.0

@@ -1,6 +1,6 @@
-"""
+﻿"""
 网络访问工具集
-为 Agent 提供 HTTP 请求、网页抓取、API 调用能力
+为 Agent 提供 HTTP 请求、网页抓取、API 调用、网络搜索能力
 """
 
 import json
@@ -247,3 +247,111 @@ def download_file(url: str, save_path: Optional[str] = None, filename: Optional[
         return f"错误: 下载失败 - {e}"
     except Exception as e:
         return f"错误: {e}"
+
+
+@tool
+def web_search(query: str, max_results: int = 5) -> str:
+    """网络搜索。当你需要查找实时信息、不确定的知识、最新新闻、技术文档等时使用。
+    搜索关键词应简洁明确，例如 "Python 3.12 新特性" 而非整句话。
+
+    Args:
+        query: 搜索关键词，例如 "2025年诺贝尔物理学奖得主"
+        max_results: 返回的最大结果数（默认 5，最多 10）
+    """
+    if max_results > 10:
+        max_results = 10
+
+    errors = []
+
+    # 引擎1: ddgs（duckduckgo_search 新版，后端兼容性更好）
+    try:
+        from ddgs import DDGS
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=max_results))
+        if results:
+            return _format_search_results(query, results)
+        errors.append("ddgs: 无结果返回")
+    except ImportError:
+        errors.append("ddgs 未安装")
+    except Exception as e:
+        errors.append(f"ddgs: {e}")
+
+    # 引擎2: duckduckgo_search（旧版兼容）
+    try:
+        from duckduckgo_search import DDGS as OldDDGS
+        with OldDDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=max_results))
+        if results:
+            return _format_search_results(query, results)
+        errors.append("duckduckgo_search: 无结果返回")
+    except ImportError:
+        errors.append("duckduckgo-search 未安装")
+    except Exception as e:
+        errors.append(f"duckduckgo_search: {e}")
+
+    # 引擎3: cn.bing.com 直接抓取（国内可用，requests + BeautifulSoup）
+    try:
+        results = _scrape_cn_bing(query, max_results)
+        if results:
+            return _format_search_results(query, results)
+        errors.append("cn.bing.com: 无结果返回")
+    except ImportError:
+        errors.append("cn.bing.com: 缺少 beautifulsoup4 库")
+    except Exception as e:
+        errors.append(f"cn.bing.com: {e}")
+
+    # 所有引擎都失败
+    return (
+        f"搜索失败：所有搜索引擎均不可用。\n"
+        f"详情：{'；'.join(errors)}\n"
+        f"建议：请检查网络连接，或尝试使用 http_request 工具直接访问搜索引擎。"
+    )
+
+
+def _format_search_results(query: str, results: list) -> str:
+    """格式化搜索结果"""
+    lines = [f"搜索关键词: {query}\n"]
+    for i, r in enumerate(results, 1):
+        title = r.get("title", "无标题")
+        href = r.get("href", "无链接")
+        body = r.get("body", "无描述")
+        lines.append(f"[{i}] {title}")
+        lines.append(f"    URL: {href}")
+        lines.append(f"    摘要: {body}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _scrape_cn_bing(query: str, max_results: int = 5) -> list:
+    """从 cn.bing.com 抓取搜索结果（国内网络可用）"""
+    import requests
+    from bs4 import BeautifulSoup
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    }
+    resp = requests.get(
+        "https://cn.bing.com/search",
+        params={"q": query, "count": max_results},
+        headers=headers,
+        timeout=15,
+    )
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "html.parser")
+    results = []
+    for item in soup.select("li.b_algo")[:max_results]:
+        title_el = item.select_one("h2 a")
+        desc_el = item.select_one(".b_caption p, .b_lineclamp2, .b_algoSlug")
+        if not title_el:
+            continue
+        results.append({
+            "title": title_el.get_text(strip=True),
+            "href": title_el.get("href", ""),
+            "body": desc_el.get_text(strip=True) if desc_el else "",
+        })
+    return results

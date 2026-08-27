@@ -1,0 +1,9 @@
+﻿{
+  "provider": "minimax",
+  "name": "MiniMax Agent",
+  "description": "MiniMax Agent (agent.minimaxi.com) via browser capture",
+  "token": "",
+  "cookie_str": "",
+  "bot_id": "",
+  "notes": "Run analyze_minimax/capture_with_response.py first to get token and cookies"
+}

@@ -1,0 +1,5 @@
+{
+    "conda_base": "D:/Anaconda3",
+    "conda_env": "pyqt",
+    "auto_use_conda_for_python": true
+}

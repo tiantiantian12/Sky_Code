@@ -9,6 +9,15 @@ import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 
+# ── Windows 任务栏图标修复 ──
+# 必须在 QApplication 创建之前调用，否则 Windows 会用 python.exe 的默认图标
+if sys.platform == "win32":
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("SkyCode.LLMAgent.1.0")
+    except Exception:
+        pass
+
 from PySide6.QtWidgets import QApplication, QStyleFactory
 from PySide6.QtGui import QIcon
 from PySide6.QtCore import QSize

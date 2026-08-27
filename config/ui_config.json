@@ -1,0 +1,7 @@
+{
+  "theme": "dark",
+  "background_image": "D:/qt_project/LLM_Agent/assets/ico/generated_image.png",
+  "background_opacity": 0.3,
+  "accent_color": "#4f46e5",
+  "last_model_display": "⭐ liquid/lfm-2.5-embedding-350m：free"
+}

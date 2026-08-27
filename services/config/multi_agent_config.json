@@ -1,0 +1,138 @@
+{
+    "_说明": "多Agent协作配置文件 - 定义所有子Agent及其路由规则",
+    "_使用说明": "enabled=false 时退化为单Agent模式；修改后调用 reload_config() 生效。\n新流程：LLM先分析复杂度 → 简单任务直接回答 → 复杂任务生成计划+多Agent协作。",
+
+    "global": {
+        "enabled": true,
+        "_enabled_说明": "是否启用多Agent协作模式。false 时使用原有单Agent模式。",
+        "orchestrator_model": "inherit",
+        "_orchestrator_model_说明": "编排器使用的模型。'inherit' 表示跟随用户选择的模型。",
+        "synthesize_with_llm": true,
+        "_synthesize_with_llm_说明": "子Agent执行完毕后是否用LLM合并总结结果。true=LLM总结，false=直接拼接。",
+        "parallel_execution": false,
+        "_parallel_execution_说明": "是否允许并行执行多个子Agent。true=并行(适合独立子任务)，false=串行(适合有依赖的子任务)。",
+        "route_strategy": "hybrid",
+        "_route_strategy_说明": "[已废弃] 新架构由LLM直接分析复杂度，不再依赖关键词路由。保留此字段用于兼容。",
+        "plan_mode": "replan",
+        "_plan_mode_说明": "规划模式。'replan'=LLM生成计划→逐步执行+重规划。新架构中复杂任务自动走此流程。",
+        "max_replan_rounds": 3,
+        "_max_replan_rounds_说明": "RePlan 模式下最多重规划次数，防止无限循环。"
+    },
+
+    "agents": [
+        {
+            "name": "code_agent",
+            "display_name": "代码工程师",
+            "role_prompt": "你是一位资深代码工程师，擅长阅读、编写、修改和调试代码。你可以操作文件系统、执行脚本、搜索代码。每次操作前用中文简短说明意图，操作后总结结果，像真人同事一样自然对话，最终给出可运行的代码。",
+            "tool_names": [
+                "read_file", "write_file", "edit_file", "delete_file",
+                "list_directory", "scan_project", "search_files",
+                "execute_code", "run_command", "search_code"
+            ],
+            "max_steps": 8,
+            "trigger_keywords": [
+                "写代码", "修改代码", "修复bug", "调试", "运行",
+                "执行", "编译", "代码", "函数", "类", "脚本",
+                "文件", "目录", "项目结构", "重构", "优化",
+                "写一个", "实现", "开发", "编程", "test", "测试",
+                "排序", "搜索算法", "算法", "排序算法", "递归",
+                "commit", "git", "diff", "合并", "冲突"
+            ],
+            "llm_model": "inherit",
+            "temperature": 0.2
+        },
+        {
+            "name": "web_agent",
+            "display_name": "网络搜索员",
+            "role_prompt": "你是一位网络信息搜索专家，擅长搜索网页、调用API、抓取内容、下载文件。回答简洁，提供准确的信息来源。",
+            "tool_names": [
+                "http_request", "fetch_webpage", "api_call",
+                "download_file", "web_search"
+            ],
+            "max_steps": 5,
+            "trigger_keywords": [
+                "搜索", "查找", "查询", "百度", "谷歌", "Google",
+                "下载", "抓取", "爬虫", "API", "接口",
+                "网页", "网站", "链接", "URL", "http",
+                "新闻", "最新", "直播", "热搜", "资讯",
+                "网上", "在线", "官网", "文档", "资料"
+            ],
+            "llm_model": "inherit",
+            "temperature": 0.3
+        },
+        {
+            "name": "data_agent",
+            "display_name": "数据分析师",
+            "role_prompt": "你是一位数据分析师，擅长处理CSV/Excel数据、统计分析、生成图表、数据转换。回答简洁，用数据说话，能生成可视化图表。",
+            "tool_names": [
+                "read_csv", "read_excel", "analyze_data",
+                "create_chart", "transform_data",
+                "read_file", "write_file"
+            ],
+            "max_steps": 6,
+            "trigger_keywords": [
+                "数据", "分析", "图表", "统计", "Excel",
+                "CSV", "表格", "可视化", "报表", "汇总",
+                "计算", "求和", "平均值", "排序", "筛选",
+                "曲线", "柱状图", "饼图", "趋势",
+                "处理数据", "清洗", "转换"
+            ],
+            "llm_model": "inherit",
+            "temperature": 0.2
+        },
+        {
+            "name": "document_agent",
+            "display_name": "文档处理员",
+            "role_prompt": "你是一位文档处理专家，擅长解析PDF、Word、PPT等文档，提取信息和元数据。回答简洁，能准确提取文档中的关键信息。",
+            "tool_names": [
+                "parse_pdf", "parse_word", "parse_ppt",
+                "parse_document", "extract_document_metadata",
+                "read_file"
+            ],
+            "max_steps": 4,
+            "trigger_keywords": [
+                "PDF", "Word", "PPT", "文档", "解析",
+                "提取", "读取文档", "docx", "pptx",
+                "报告", "论文", "说明书", "合同",
+                "元数据", "目录", "页数", "作者"
+            ],
+            "llm_model": "inherit",
+            "temperature": 0.1
+        },
+        {
+            "name": "general_agent",
+            "display_name": "通用助手",
+            "role_prompt": "",
+            "_role_prompt_说明": "留空则使用默认系统提示词。",
+            "tool_names": [],
+            "_tool_names_说明": "空列表表示使用全部工具。",
+            "max_steps": 10,
+            "trigger_keywords": [],
+            "_trigger_keywords_说明": "空列表表示此Agent作为兜底Agent。",
+            "llm_model": "inherit",
+            "temperature": 0.3
+        }
+    ],
+
+    "routing_rules": [
+        {
+            "_comment": "复杂任务：涉及多个领域的任务，由多Agent协作完成",
+            "patterns": ["同时.*和", "既要.*又要", "并且"],
+            "mode": "collaborate",
+            "agents": "auto",
+            "_agents_说明": "'auto'=由LLM决定哪些Agent参与。也可以是 ['code_agent', 'web_agent']"
+        },
+        {
+            "_comment": "代码+文档场景：查看文档后编写代码",
+            "patterns": ["根据.*文档.*写", "按照.*规范.*实现", "参考.*文档.*开发"],
+            "mode": "collaborate",
+            "agents": ["document_agent", "code_agent"]
+        },
+        {
+            "_comment": "搜索+分析场景：搜索外部信息后分析",
+            "patterns": ["搜索.*分析", "查.*统计", "调研"],
+            "mode": "collaborate",
+            "agents": ["web_agent", "data_agent"]
+        }
+    ]
+}

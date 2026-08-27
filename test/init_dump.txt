@@ -1,0 +1,100 @@
+                end += 2
+                continue
+            if text[end] == '"':
+                raw = text[start + 1:end]
+                # 尝试修复反斜杠后作为 JSON 字符串解析
+                try:
+                    return json.loads('"' + _fix_backslashes(raw) + '"')
+                except Exception:
+                    return raw
+            end += 1
+        return text[start + 1:]
+
+    # 其他（数字、bool、null）
+    end = start
+    while end < len(text) and text[end] not in (',', '}', ']', '\n'):
+        end += 1
+    raw = text[start:end].strip()
+    try:
+        return json.loads(raw)
+    except Exception:
+        return raw
+
+
+def _extract_braced_object(text: str, start: int) -> dict:
+    """用括号匹配提取完整的 {} 对象，然后尝试解析"""
+    depth = 0
+    in_string = False
+    escape_next = False
+    for j in range(start, len(text)):
+        ch = text[j]
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == '\\' and in_string:
+            escape_next = True
+            continue
+        if ch == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                candidate = text[start:j + 1]
+                # 尝试直接解析
+                try:
+                    data = json.loads(candidate)
+                    if isinstance(data, dict):
+                        return data
+                except Exception:
+                    pass
+                # 修复反斜杠后解析
+                try:
+                    fixed = _fix_backslashes(candidate)
+                    data = json.loads(fixed)
+                    if isinstance(data, dict):
+                        return data
+                except Exception:
+                    pass
+                return None
+    return None
+
+
+def _fix_backslashes(text: str) -> str:
+    """修复 JSON 字符串中未转义的反斜杠"""
+    result = []
+    in_string = False
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == '\\' and in_string:
+            if i + 1 < len(text):
+                next_ch = text[i + 1]
+                if next_ch in ('"', '\\', '/', 'b', 'f', 'n', 'r', 't'):
+                    result.append(ch)
+                    result.append(next_ch)
+                    i += 2
+                    continue
+                elif next_ch == 'u':
+                    # \u 后必须跟 4 位十六进制才是合法 JSON 转义
+                    hex_part = text[i+2:i+6] if i+6 <= len(text) else ""
+                    if len(hex_part) == 4 and all(c in '0123456789abcdefABCDEF' for c in hex_part):
+                        result.append(ch)
+                        result.append(next_ch)
+                        i += 2
+                        continue
+                    else:
+                        result.append('\\\\')
+                        i += 1
+                        continue
+                else:
+                    result.append('\\\\')
+                    i += 1
+                    continue
+            else:
+                result.append('\\\\')
+                i += 1

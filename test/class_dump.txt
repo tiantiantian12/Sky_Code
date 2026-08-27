@@ -1,0 +1,32 @@
+
+
+class AgentService:
+    """Agent 服务 — 自定义 ReAct 循环"""
+
+    def __init__(self):
+        self._tools = get_all_tools()
+        self._tool_map = {t.name: t for t in self._tools}
+        self._config = get_agent_config()
+
+    def clear_cache(self):
+        pass
+
+    def run(self, user_message: str, model_display: str = "MiMo-V2-Flash",
+            history: list = None, max_steps: int = None) -> dict:
+        results = list(self._run_iter(user_message, model_display, history, max_steps))
+        output, steps = "", []
+        for event in results:
+            if event["type"] == "step":
+                steps.append({"tool": event["tool"], "input": event["input"], "output": event["output"]})
+            elif event["type"] in ("result", "error"):
+                output = event["output"]
+        return {"output": output, "steps": steps}
+
+    def run_stream(self, user_message: str, model_display: str = "MiMo-V2-Flash",
+                   on_step=None, history: list = None, max_steps: int = None) -> Generator:
+        event_queue = queue.Queue()
+
+        def run_in_thread():
+            try:
+                for event in self._run_iter(user_message, model_display, history, max_steps):
+                    event_queue.put(event)

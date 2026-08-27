@@ -5,6 +5,7 @@
 
 import json
 import os
+import re
 import tempfile
 from typing import Optional, Dict, Any, List
 from langchain_core.tools import tool
@@ -118,28 +119,14 @@ def execute_sequence(steps_json: str) -> str:
             results.append(f"步骤 {i+1}: 错误 - 工具 '{tool_name}' 不存在")
             continue
 
-        # 替换变量引用
-        if isinstance(tool_input, dict):
-            resolved_input = {}
-            for k, v in tool_input.items():
-                if isinstance(v, str) and v.startswith("${") and v.endswith("}"):
-                    var_name = v[2:-1]
-                    resolved_value = _workflow_context.get_variable(var_name)
-                    if resolved_value is None:
-                        results.append(f"步骤 {i+1}: 错误 - 变量 '{var_name}' 不存在")
-                        break
-                    resolved_input[k] = resolved_value
-                else:
-                    resolved_input[k] = v
-            else:
-                tool_input = resolved_input
-        elif isinstance(tool_input, str) and tool_input.startswith("${") and tool_input.endswith("}"):
-            var_name = tool_input[2:-1]
-            resolved_value = _workflow_context.get_variable(var_name)
-            if resolved_value is None:
-                results.append(f"步骤 {i+1}: 错误 - 变量 '{var_name}' 不存在")
-                continue
-            tool_input = resolved_value
+        # 替换变量引用（递归解析 dict/list/str 中的 ${var}）
+        tool_input = _resolve_var(tool_input)
+        unresolved = _check_unresolved(tool_input)
+        if unresolved:
+            results.append(
+                f"步骤 {i+1}: 错误 - 以下变量未定义: {', '.join(set(unresolved))}"
+            )
+            continue
 
         # 执行工具
         try:
@@ -161,6 +148,40 @@ def execute_sequence(steps_json: str) -> str:
             break
 
     return "\n".join(results)
+
+
+_VAR_PATTERN = re.compile(r'\$\{(\w+)\}')
+
+
+def _resolve_var(value: Any) -> Any:
+    """递归解析字符串/字典/列表中的 ${var_name} 变量引用，支持嵌入替换。"""
+    if isinstance(value, str):
+        def _replace(match):
+            var_name = match.group(1)
+            resolved = _workflow_context.get_variable(var_name)
+            if resolved is not None:
+                return str(resolved)
+            return match.group(0)  # 变量不存在则保持原样
+        return _VAR_PATTERN.sub(_replace, value)
+    if isinstance(value, dict):
+        return {k: _resolve_var(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_resolve_var(v) for v in value]
+    return value
+
+
+def _check_unresolved(value: Any) -> List[str]:
+    """检查解析后的值中是否存在未解析的 ${var}，返回未解析变量名列表。"""
+    unresolved: List[str] = []
+    if isinstance(value, str):
+        unresolved.extend(_VAR_PATTERN.findall(value))
+    elif isinstance(value, dict):
+        for v in value.values():
+            unresolved.extend(_check_unresolved(v))
+    elif isinstance(value, list):
+        for v in value:
+            unresolved.extend(_check_unresolved(v))
+    return unresolved
 
 
 @tool
@@ -194,10 +215,14 @@ def execute_parallel(tasks_json: str) -> str:
 
         try:
             tool = tools_map[tool_name]
-            if isinstance(tool_input, dict):
-                result = tool.invoke(tool_input)
+            resolved_input = _resolve_var(tool_input)
+            unresolved = _check_unresolved(resolved_input)
+            if unresolved:
+                return {"task": task, "error": f"变量未定义: {', '.join(set(unresolved))}"}
+            if isinstance(resolved_input, dict):
+                result = tool.invoke(resolved_input)
             else:
-                result = tool.invoke(tool_input)
+                result = tool.invoke(resolved_input)
 
             return {"task": task, "result": result, "output_var": output_var}
         except Exception as e:
@@ -224,7 +249,7 @@ def execute_parallel(tasks_json: str) -> str:
 
 
 @tool
-def execute_conditional(condition_var: str, condition: str,
+def execute_conditional(condition_var: str, condition: str, condition_value: str,
                         true_tool: str, true_input: str,
                         false_tool: Optional[str] = None,
                         false_input: Optional[str] = None) -> str:
@@ -232,7 +257,8 @@ def execute_conditional(condition_var: str, condition: str,
 
     Args:
         condition_var: 条件变量名
-        condition: 条件表达式，支持 ==、!=、>、<、>=、<=、contains、not_contains
+        condition: 比较操作符，支持 ==、!=、>、<、>=、<=、contains、not_contains
+        condition_value: 与变量比较的值
         true_tool: 条件为真时执行的工具名
         true_input: 条件为真时的工具输入 JSON 字符串
         false_tool: 条件为假时执行的工具名（可选）
@@ -250,21 +276,21 @@ def execute_conditional(condition_var: str, condition: str,
     condition_met = False
     try:
         if condition == "==":
-            condition_met = str(var_value) == str(condition)
+            condition_met = str(var_value) == str(condition_value)
         elif condition == "!=":
-            condition_met = str(var_value) != str(condition)
+            condition_met = str(var_value) != str(condition_value)
         elif condition == ">":
-            condition_met = float(var_value) > float(condition)
+            condition_met = float(str(var_value)) > float(condition_value)
         elif condition == "<":
-            condition_met = float(var_value) < float(condition)
+            condition_met = float(str(var_value)) < float(condition_value)
         elif condition == ">=":
-            condition_met = float(var_value) >= float(condition)
+            condition_met = float(str(var_value)) >= float(condition_value)
         elif condition == "<=":
-            condition_met = float(var_value) <= float(condition)
+            condition_met = float(str(var_value)) <= float(condition_value)
         elif condition == "contains":
-            condition_met = str(condition) in str(var_value)
+            condition_met = str(condition_value) in str(var_value)
         elif condition == "not_contains":
-            condition_met = str(condition) not in str(var_value)
+            condition_met = str(condition_value) not in str(var_value)
         else:
             return f"错误: 不支持的条件 '{condition}'"
     except Exception as e:
@@ -287,7 +313,12 @@ def execute_conditional(condition_var: str, condition: str,
     try:
         tool = tools_map[tool_name]
         parsed_input = json.loads(tool_input) if isinstance(tool_input, str) else tool_input
-        result = tool.invoke(parsed_input)
+        # 替换 input 中的变量引用
+        resolved_input = _resolve_var(parsed_input)
+        unresolved = _check_unresolved(resolved_input)
+        if unresolved:
+            return f"错误: 变量未定义: {', '.join(set(unresolved))}"
+        result = tool.invoke(resolved_input)
         return f"条件为{'真' if condition_met else '假'}，执行 {tool_name}:\n{result}"
     except Exception as e:
         return f"错误: 工具执行失败 - {e}"
@@ -334,7 +365,13 @@ def execute_loop(items_var: str, tool_name: str, tool_input_template: str,
         input_str = tool_input_template.replace("${item}", str(item))
         try:
             parsed_input = json.loads(input_str)
-            result = tool.invoke(parsed_input)
+            # 替换模板后再解析变量引用
+            resolved_input = _resolve_var(parsed_input)
+            unresolved = _check_unresolved(resolved_input)
+            if unresolved:
+                results.append(f"循环第{i+1}次: 错误 - 变量未定义: {', '.join(set(unresolved))}")
+                continue
+            result = tool.invoke(resolved_input)
             results.append(result)
         except Exception as e:
             results.append(f"错误: {e}")
